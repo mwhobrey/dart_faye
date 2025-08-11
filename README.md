@@ -11,6 +11,9 @@ A Dart implementation of the Faye publish-subscribe messaging system, compatible
 - **Streaming API**: Modern Dart streams for reactive programming
 - **Cross-Platform**: Works on Dart VM, Flutter, and web platforms
 - **Type Safety**: Full type safety with Dart's strong typing system
+- **Extension Support**: Support for Faye extensions for authentication and message transformation
+- **Comprehensive Logging**: Built-in logging system for debugging and monitoring
+- **Automatic Reconnection**: WebSocket transport with automatic reconnection and heartbeat
 
 ## Installation
 
@@ -18,7 +21,7 @@ Add the following to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  faye: ^1.0.0
+  dart_faye: ^1.0.0
 ```
 
 Then run:
@@ -32,7 +35,7 @@ dart pub get
 ### Basic Usage
 
 ```dart
-import 'package:faye/faye.dart';
+import 'package:dart_faye/dart_faye.dart';
 
 void main() async {
   // Create a client
@@ -60,10 +63,10 @@ void main() async {
 }
 ```
 
-### Advanced Usage
+### Advanced Usage with Extensions
 
 ```dart
-import 'package:faye/faye.dart';
+import 'package:dart_faye/dart_faye.dart';
 
 void main() async {
   // Create client with options
@@ -72,19 +75,31 @@ void main() async {
     'interval': 1000,
   });
   
+  // Set up extension for authentication
+  final extension = FayeExtension(
+    api: 'your-api-key',
+    token: 'your-token',
+    onLog: (level, data) {
+      print('[$level] $data');
+    },
+  );
+  
+  // Set the extension on the client
+  client.setExtension(extension);
+  
   // Listen to connection state changes
   client.stateStream.listen((state) {
     switch (state) {
-      case Client.unconnected:
+      case 1: // unconnected
         print('Disconnected');
         break;
-      case Client.connecting:
+      case 2: // connecting
         print('Connecting...');
         break;
-      case Client.connected:
+      case 3: // connected
         print('Connected');
         break;
-      case Client.disconnected:
+      case 4: // disconnected
         print('Disconnected');
         break;
     }
@@ -107,7 +122,7 @@ void main() async {
     print('Notification: $data');
   });
   
-  // Publish messages
+  // Publish messages (extension will automatically add authentication)
   await client.publish('/chat/room1', {'message': 'Hello from room 1'});
   await client.publish('/chat/room2', {'message': 'Hello from room 2'});
   await client.publish('/notifications', {'type': 'info', 'text': 'System update'});
@@ -144,16 +159,35 @@ Client(String endpoint, [Map<String, dynamic>? options])
 - `unsubscribe(String channel)`: Unsubscribe from a channel
 - `publish(String channel, dynamic data)`: Publish a message to a channel
 - `close()`: Close the client and clean up resources
+- `setExtension(dynamic extension)`: Set a Faye extension for authentication and message transformation
+- `setTransport(String transport)`: Set the transport type ('websocket', 'http', 'callback-polling')
 
 #### Properties
 
-- `state`: Current connection state
+- `state`: Current connection state (1=unconnected, 2=connecting, 3=connected, 4=disconnected)
 - `clientId`: Server-assigned client ID
 - `transport`: Current transport type
 - `subscriptions`: List of active subscriptions
 - `messageStream`: Stream of incoming messages
 - `stateStream`: Stream of state changes
 - `errorStream`: Stream of errors
+
+### FayeExtension
+
+A class for implementing Faye extensions to add authentication and transform messages.
+
+```dart
+class FayeExtension {
+  FayeExtension({
+    required String api,
+    required String token,
+    required Function(String level, dynamic data) onLog,
+  });
+  
+  Map<String, dynamic> outgoing(Map<String, dynamic> message);
+  Map<String, dynamic> incoming(Map<String, dynamic> message);
+}
+```
 
 ### Channel
 
@@ -240,6 +274,27 @@ The library supports channel patterns for subscribing to multiple channels:
 - `FayeError.subscription()`: Subscription errors
 - `FayeError.publication()`: Publication errors
 - `FayeError.channel()`: Channel validation errors
+
+## Logging
+
+The package includes comprehensive logging for debugging:
+
+```dart
+import 'package:logging/logging.dart';
+
+void main() {
+  // Configure logging
+  Logger.root.level = Level.ALL;
+  Logger.root.onRecord.listen((record) {
+    print('${record.level.name}: ${record.time}: '
+        '${record.loggerName}: ${record.message}');
+  });
+  
+  // Create client and use normally
+  final client = Client('http://localhost:8000/bayeux');
+  // ... rest of your code
+}
+```
 
 ## Examples
 

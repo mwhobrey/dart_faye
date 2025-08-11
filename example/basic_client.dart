@@ -1,4 +1,4 @@
-import 'package:dart_faye/faye.dart';
+import 'package:dart_faye/dart_faye.dart';
 
 void main() async {
   print('🚀 Starting Faye Basic Client Example');

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:logging/logging.dart';
 import '../error.dart';
 import '../transport/transport.dart';
 import '../transport/http_transport.dart';
@@ -6,141 +7,183 @@ import '../transport/websocket_transport.dart';
 
 /// Dispatcher for handling Bayeux protocol messages
 class Dispatcher {
+  /// Logger
+  static final Logger _logger = Logger('FayeDispatcher');
+
   /// Client ID
   String? _clientId;
-  
+
   /// Current state
   int _state = 1; // unconnected
-  
+
   /// Message ID counter
   int _messageId = 0;
-  
+
   /// Response callbacks
   final Map<String, Completer<Map<String, dynamic>>> _responseCallbacks = {};
-  
+
   /// Current transport
   Transport? _transport;
-  
+
   /// Available transports
   final List<Transport> _transports = [];
-  
+
   /// Connection advice
   Map<String, dynamic> _advice = {
     'reconnect': 'retry',
     'interval': 1000,
     'timeout': 60000,
   };
-  
+
   /// Connection endpoint
   final String _endpoint;
-  
-  /// Message stream controller
-  final StreamController<Map<String, dynamic>> _messageController = 
-      StreamController<Map<String, dynamic>>.broadcast();
-  
-  /// State change stream controller
-  final StreamController<int> _stateController = 
-      StreamController<int>.broadcast();
-  
-  /// Error stream controller
-  final StreamController<FayeError> _errorController = 
-      StreamController<FayeError>.broadcast();
-  
 
-  
+  /// Message stream controller
+  final StreamController<Map<String, dynamic>> _messageController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  /// State change stream controller
+  final StreamController<int> _stateController =
+      StreamController<int>.broadcast();
+
+  /// Error stream controller
+  final StreamController<FayeError> _errorController =
+      StreamController<FayeError>.broadcast();
+
   Dispatcher(this._endpoint, Map<String, dynamic> options) {
+    _logger.info('Dispatcher: Creating dispatcher for endpoint: $_endpoint');
+    _logger.info('Dispatcher: Options: $options');
     _initializeTransports();
+    _logger.info('Dispatcher: Dispatcher created successfully');
   }
-  
+
   /// Get current state
   int get state => _state;
-  
+
   /// Get client ID
   String? get clientId => _clientId;
-  
+
   /// Get current transport
   Transport? get transport => _transport;
-  
+
   /// Get message stream
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
-  
+
   /// Get state change stream
   Stream<int> get stateStream => _stateController.stream;
-  
+
   /// Get error stream
   Stream<FayeError> get errorStream => _errorController.stream;
-  
+
   /// Initialize available transports
   void _initializeTransports() {
+    _logger.info('Dispatcher: Initializing transports...');
+
     // Add HTTP transport
     final httpTransport = HttpTransport();
     _transports.add(httpTransport);
-    
+    _logger.info('Dispatcher: Added HTTP transport: ${httpTransport.name}');
+
     // Add WebSocket transport if supported
     final wsTransport = WebSocketTransport();
     if (wsTransport.supported) {
       _transports.add(wsTransport);
+      _logger
+          .info('Dispatcher: Added WebSocket transport: ${wsTransport.name}');
+    } else {
+      _logger.warning('Dispatcher: WebSocket transport not supported');
     }
-    
+
     // Set default transport
     _transport = _transports.first;
+    _logger.info('Dispatcher: Set default transport: ${_transport?.name}');
+    _logger.info(
+        'Dispatcher: Available transports: ${_transports.map((t) => t.name).toList()}');
   }
-  
+
   /// Set transport
   void setTransport(String transportName) {
+    _logger.info('Dispatcher: Setting transport to: $transportName');
+    _logger.info(
+        'Dispatcher: Available transports: ${_transports.map((t) => t.name).toList()}');
+
     final transport = _transports.firstWhere(
       (t) => t.name == transportName,
       orElse: () => throw ArgumentError('Transport not found: $transportName'),
     );
-    
+
     if (_transport != transport) {
+      _logger.info(
+          'Dispatcher: Changing transport from ${_transport?.name} to ${transport.name}');
       _transport = transport;
+    } else {
+      _logger.info('Dispatcher: Transport unchanged (${transport.name})');
     }
   }
-  
+
   /// Update state
   void _updateState(int newState) {
+    _logger.info('Dispatcher: Updating state from $_state to $newState');
     if (_state != newState) {
       _state = newState;
       _stateController.add(newState);
+      _logger.info('Dispatcher: State updated and broadcasted');
+    } else {
+      _logger.info('Dispatcher: State unchanged ($newState)');
     }
   }
-  
+
   /// Generate message ID
   String _generateMessageId() {
     _messageId = (_messageId + 1) % 9007199254740991; // 2^53 - 1
-    return _messageId.toString();
+    final messageId = _messageId.toString();
+    _logger.info('Dispatcher: Generated message ID: $messageId');
+    return messageId;
   }
-  
 
-  
   /// Connect to server
   Future<void> connect({Map<String, String>? headers}) async {
-          if (_state != 1) return; // unconnected
-      
-      _updateState(2); // connecting
-    
+    _logger.info('Dispatcher: Starting connection to $_endpoint');
+    _logger.info('Dispatcher: Current state: $_state');
+
+    if (_state != 1) {
+      _logger.warning(
+          'Dispatcher: Cannot connect, not in unconnected state. Current state: $_state');
+      return; // unconnected
+    }
+
+    _logger.info('Dispatcher: Updating state to connecting (2)');
+    _updateState(2); // connecting
+
     try {
-      // Perform handshake
-              await _handshake(headers: headers);
-        
-        // Connect transport
-        await _connectTransport(headers: headers);
-      
-              _updateState(3); // connected
-      } catch (e) {
-        _updateState(4); // disconnected
+      _logger.info('Dispatcher: Starting transport connection...');
+      // Connect transport first
+      await _connectTransport(headers: headers);
+      _logger.info('Dispatcher: Transport connection completed');
+
+      _logger.info('Dispatcher: Starting handshake...');
+      // Perform handshake after transport is connected
+      await _handshake(headers: headers);
+      _logger.info('Dispatcher: Handshake completed successfully');
+
+      _logger.info('Dispatcher: Updating state to connected (3)');
+      _updateState(3); // connected
+      _logger.info('Dispatcher: Connection completed successfully');
+    } catch (e) {
+      _logger.severe('Dispatcher: Connection failed with error: $e');
+      _logger.severe('Dispatcher: Updating state to disconnected (4)');
+      _updateState(4); // disconnected
       _emitError(FayeError.network('Connection failed: $e'));
       rethrow;
     }
   }
-  
+
   /// Disconnect from server
   Future<void> disconnect() async {
-          if (_state == 1) return; // unconnected
-      
-      _updateState(4); // disconnected
-    
+    if (_state == 1) return; // unconnected
+
+    _updateState(4); // disconnected
+
     // Send disconnect message
     if (_clientId != null) {
       try {
@@ -152,147 +195,217 @@ class Dispatcher {
         // Ignore disconnect errors
       }
     }
-    
+
     // Disconnect transport
     await _transport?.disconnect();
-    
+
     _clientId = null;
-          _updateState(1); // unconnected
+    _updateState(1); // unconnected
   }
-  
+
   /// Perform handshake
   Future<void> _handshake({Map<String, String>? headers}) async {
+    _logger.info('Dispatcher: Starting handshake...');
+
     final message = {
       'channel': '/meta/handshake',
-              'version': '1.0',
+      'version': '1.0',
       'supportedConnectionTypes': _transports.map((t) => t.name).toList(),
       'id': _generateMessageId(),
     };
-    
+
+    _logger.info('Dispatcher: Handshake message: $message');
+    _logger.info(
+        'Dispatcher: Available transports: ${_transports.map((t) => t.name).toList()}');
+
     final response = await _sendMessage(message, headers: headers);
-    
+    _logger.info('Dispatcher: Handshake response: $response');
+
     if (response['successful'] == true) {
       _clientId = response['clientId'] as String?;
-      
+      _logger.info('Dispatcher: Handshake successful, clientId: $_clientId');
+
       // Update advice
       if (response['advice'] != null) {
         _advice.addAll(response['advice'] as Map<String, dynamic>);
+        _logger.info('Dispatcher: Updated advice: $_advice');
       }
-      
-      // Set recommended transport
+
+      // Set recommended transport (but only if we support it)
       if (response['supportedConnectionTypes'] != null) {
-        final supportedTypes = response['supportedConnectionTypes'] as List<dynamic>;
+        final supportedTypes =
+            response['supportedConnectionTypes'] as List<dynamic>;
         final recommendedType = supportedTypes.first as String;
-        setTransport(recommendedType);
+        _logger
+            .info('Dispatcher: Server recommended transport: $recommendedType');
+
+        // Only switch to recommended transport if we support it
+        final availableTransportNames = _transports.map((t) => t.name).toList();
+        if (availableTransportNames.contains(recommendedType)) {
+          _logger.info(
+              'Dispatcher: Setting recommended transport: $recommendedType');
+          setTransport(recommendedType);
+        } else {
+          _logger.info(
+              'Dispatcher: Recommended transport $recommendedType not available, keeping current transport: ${_transport?.name}');
+        }
       }
     } else {
+      _logger.severe('Dispatcher: Handshake failed: ${response['error']}');
       throw FayeError.fromBayeux(response['error'] ?? {});
     }
   }
-  
+
   /// Connect transport
   Future<void> _connectTransport({Map<String, String>? headers}) async {
+    _logger.info('Dispatcher: Connecting transport...');
+    _logger.info('Dispatcher: Current transport: ${_transport?.name}');
+    _logger.info('Dispatcher: Endpoint: $_endpoint');
+
     if (_transport == null) {
+      _logger.severe('Dispatcher: No transport available');
       throw FayeError.network('No transport available');
     }
-    
+
+    _logger.info(
+        'Dispatcher: Attempting to connect transport ${_transport!.name} to $_endpoint');
     await _transport!.connect(_endpoint, headers: headers);
-    
+    _logger.info('Dispatcher: Transport connected successfully');
+
     // Listen for transport messages
+    _logger.info('Dispatcher: Setting up transport message listeners');
     _transport!.messageStream.listen(_handleTransportMessage);
     _transport!.errorStream.listen(_emitError);
+    _logger.info('Dispatcher: Transport listeners configured');
   }
-  
+
   /// Send message
   Future<Map<String, dynamic>> _sendMessage(
     Map<String, dynamic> message, {
     Map<String, String>? headers,
   }) async {
+    _logger.info('Dispatcher: Sending message: $message');
+
     if (_transport == null) {
+      _logger.severe('Dispatcher: No transport available for sending message');
       throw FayeError.network('No transport available');
     }
-    
+
     final messageId = message['id'] as String?;
     Completer<Map<String, dynamic>>? completer;
-    
+
     if (messageId != null) {
       completer = Completer<Map<String, dynamic>>();
       _responseCallbacks[messageId] = completer;
+      _logger.info('Dispatcher: Waiting for response to message $messageId');
     }
-    
+
     try {
+      _logger.info(
+          'Dispatcher: Sending message via transport ${_transport!.name}');
       await _transport!.send(message);
-      
+      _logger.info('Dispatcher: Message sent successfully');
+
       if (completer != null) {
+        _logger.info(
+            'Dispatcher: Waiting for response with timeout: ${_transport!.timeout}s');
         return await completer.future.timeout(
           Duration(seconds: _transport!.timeout),
           onTimeout: () {
+            _logger.severe('Dispatcher: Message timeout for $messageId');
             _responseCallbacks.remove(messageId);
             throw FayeError.timeout('Message timeout: $messageId');
           },
         );
       }
-      
+
+      _logger.info('Dispatcher: No response expected, returning empty map');
       return <String, dynamic>{};
     } catch (e) {
+      _logger.severe('Dispatcher: Failed to send message: $e');
       _responseCallbacks.remove(messageId);
       rethrow;
     }
   }
-  
+
   /// Handle transport message
   void _handleTransportMessage(Map<String, dynamic> message) {
+    _logger.info('Dispatcher: Received transport message: $message');
+
     final messageId = message['id'] as String?;
-    
+
     // Check if this is a response to a pending request
     if (messageId != null && _responseCallbacks.containsKey(messageId)) {
+      _logger.info('Dispatcher: Found pending callback for message $messageId');
       final completer = _responseCallbacks.remove(messageId)!;
       completer.complete(message);
+      _logger.info('Dispatcher: Completed callback for message $messageId');
       return;
     }
-    
+
     // Emit message to listeners
+    _logger.info('Dispatcher: Emitting message to listeners');
     _messageController.add(message);
   }
-  
+
   /// Emit error
   void _emitError(FayeError error) {
+    _logger.severe('Dispatcher: Emitting error: $error');
     _errorController.add(error);
   }
-  
+
   /// Send connect message
   Future<void> sendConnect() async {
-    if (_state != 3 || _clientId == null) { // connected
+    _logger.info('Dispatcher: Sending connect message');
+    _logger.info('Dispatcher: Current state: $_state, clientId: $_clientId');
+
+    if (_state != 3 || _clientId == null) {
+      // connected
+      _logger.severe(
+          'Dispatcher: Cannot send connect - not connected or no clientId. State: $_state, clientId: $_clientId');
       throw FayeError.network('Not connected');
     }
-    
-    await _sendMessage({
+
+    final message = {
       'channel': '/meta/connect',
       'clientId': _clientId,
       'connectionType': _transport?.name ?? 'long-polling',
-    });
+    };
+
+    _logger.info('Dispatcher: Sending connect message: $message');
+    await _sendMessage(message);
   }
-  
+
   /// Send subscribe message
   Future<Map<String, dynamic>> subscribe(String channel) async {
-    if (_state != 3 || _clientId == null) { // connected
+    _logger.info('Dispatcher: Subscribing to channel: $channel');
+    _logger.info('Dispatcher: Current state: $_state, clientId: $_clientId');
+
+    if (_state != 3 || _clientId == null) {
+      // connected
+      _logger.severe(
+          'Dispatcher: Cannot subscribe - not connected or no clientId. State: $_state, clientId: $_clientId');
       throw FayeError.network('Not connected');
     }
-    
-    return await _sendMessage({
+
+    final message = {
       'channel': '/meta/subscribe',
       'clientId': _clientId,
       'subscription': channel,
       'id': _generateMessageId(),
-    });
+    };
+
+    _logger.info('Dispatcher: Subscribing with message: $message');
+    return await _sendMessage(message);
   }
-  
+
   /// Send unsubscribe message
   Future<Map<String, dynamic>> unsubscribe(String channel) async {
-    if (_state != 3 || _clientId == null) { // connected
+    if (_state != 3 || _clientId == null) {
+      // connected
       throw FayeError.network('Not connected');
     }
-    
+
     return await _sendMessage({
       'channel': '/meta/unsubscribe',
       'clientId': _clientId,
@@ -300,33 +413,64 @@ class Dispatcher {
       'id': _generateMessageId(),
     });
   }
-  
+
+  /// Extension for message processing
+  dynamic _extension;
+
+  /// Set extension for message processing
+  void setExtension(dynamic extension) {
+    _extension = extension;
+    _logger.info('Dispatcher: Extension set: $extension');
+  }
+
   /// Send publish message
   Future<Map<String, dynamic>> publish(String channel, dynamic data) async {
-    if (_state != 3 || _clientId == null) { // connected
+    _logger.info('Dispatcher: Publishing to channel: $channel');
+    _logger.info('Dispatcher: Current state: $_state, clientId: $_clientId');
+
+    if (_state != 3 || _clientId == null) {
+      // connected
+      _logger.severe(
+          'Dispatcher: Cannot publish - not connected or no clientId. State: $_state, clientId: $_clientId');
       throw FayeError.network('Not connected');
     }
-    
-    return await _sendMessage({
+
+    final message = {
       'channel': channel,
       'data': data,
       'clientId': _clientId,
       'id': _generateMessageId(),
-    });
+    };
+
+    // Apply extension if available
+    Map<String, dynamic> processedMessage = message;
+    if (_extension != null) {
+      try {
+        _logger.info('Dispatcher: Original message: $message');
+        processedMessage = _extension.outgoing(message);
+        _logger.info('Dispatcher: Extension returned: $processedMessage');
+        _logger.info('Dispatcher: Applied extension to message');
+      } catch (e) {
+        _logger.warning('Dispatcher: Extension processing failed: $e');
+      }
+    }
+
+    _logger.info('Dispatcher: Publishing message: $processedMessage');
+    return await _sendMessage(processedMessage);
   }
-  
+
   /// Close dispatcher
   Future<void> close() async {
     await disconnect();
     await _messageController.close();
     await _stateController.close();
     await _errorController.close();
-    
+
     for (final transport in _transports) {
       await transport.close();
     }
   }
-  
+
   /// Get dispatcher statistics
   Map<String, dynamic> get statistics {
     return {

@@ -1,5 +1,5 @@
 import 'package:test/test.dart';
-import 'package:dart_faye/faye.dart';
+import 'package:dart_faye/dart_faye.dart';
 
 void main() {
   group('Faye Library Tests', () {

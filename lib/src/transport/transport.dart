@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:logging/logging.dart';
 import 'package:meta/meta.dart';
 import '../error.dart';
 
@@ -56,8 +57,17 @@ abstract class Transport {
 
 /// Base implementation of Transport with common functionality
 abstract class BaseTransport implements Transport {
+  /// Logger
+  static final Logger _logger = Logger('FayeBaseTransport');
+  
   /// Connection timeout in seconds
   int _timeout = 30;
+  
+  /// Constructor
+  BaseTransport() {
+    _logger.info('BaseTransport: Creating base transport');
+    _logger.info('BaseTransport: Default timeout: $_timeout seconds');
+  }
   
   /// Whether the transport is connected
   bool _connected = false;
@@ -108,16 +118,21 @@ abstract class BaseTransport implements Transport {
   /// Update connection state
   @protected
   void updateConnectionState(bool connected) {
+    _logger.info('BaseTransport: Updating connection state from $_connected to $connected');
     if (_connected != connected) {
       _connected = connected;
       _connectionStateController.add(connected);
       updateLastActivity();
+      _logger.info('BaseTransport: Connection state updated to $connected');
+    } else {
+      _logger.info('BaseTransport: Connection state unchanged ($connected)');
     }
   }
   
   /// Emit a message
   @protected
   void emitMessage(Map<String, dynamic> message) {
+    _logger.info('BaseTransport: Emitting message: $message');
     _messageController.add(message);
     _statistics['messagesReceived']++;
     _statistics['bytesReceived'] += jsonEncode(message).length;
@@ -127,6 +142,7 @@ abstract class BaseTransport implements Transport {
   /// Emit an error
   @protected
   void emitError(FayeError error) {
+    _logger.severe('BaseTransport: Emitting error: $error');
     _errorController.add(error);
     _statistics['errors']++;
     updateLastActivity();

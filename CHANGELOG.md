@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.1.0
+
+### Features
+- **Extension Support**: Added support for Faye extensions to enable authentication and message transformation
+  - New `setExtension()` method on Client and Dispatcher classes
+  - Extension processing in outgoing messages for authentication headers
+  - Support for custom extension classes implementing `outgoing()` and `incoming()` methods
+- **Comprehensive Logging**: Added extensive logging throughout the package for debugging
+  - Logger integration in Client, Dispatcher, and Transport classes
+  - Detailed connection state tracking and error reporting
+  - Debug information for message processing and extension handling
+- **Improved WebSocket Transport**: Enhanced WebSocket transport reliability
+  - Better handling of batch messages (arrays) from server responses
+  - Improved connection order (transport connection before handshake)
+  - Automatic transport selection for WebSocket URLs (wss://, ws://)
+  - Removed protocol restrictions to allow server protocol selection
+
+### Bug Fixes
+- **Connection Order**: Fixed dispatcher to connect transport before handshake
+- **State Constants**: Corrected state constant usage (integer values instead of enum-like constants)
+- **Message Processing**: Fixed extension message processing to ensure modified messages are returned
+- **Batch Message Handling**: Added support for server responses in array format
+- **Transport Selection**: Improved automatic transport selection logic
+
+### Technical Improvements
+- Enhanced error handling and debugging capabilities
+- Better integration with Flutter applications
+- Improved authentication flow with extension support
+- More robust connection management
+
 ## 1.0.0
 
 ### Features

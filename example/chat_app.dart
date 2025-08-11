@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
-import 'package:dart_faye/faye.dart';
+import 'package:dart_faye/dart_faye.dart';
 
 class ChatApp {
   final Client client;

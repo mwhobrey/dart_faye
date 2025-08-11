@@ -1,4 +1,4 @@
-library dart_faye;
+library faye;
 
 import 'dart:convert';
 
@@ -18,7 +18,7 @@ export 'src/util/namespace.dart';
 /// Main Faye library class containing constants and utility methods
 class Faye {
   /// Current version of the Dart Faye implementation
-  static const String version = '1.0.0';
+  static const String version = '1.1.0';
   
   /// Bayeux protocol version
   static const String bayeuxVersion = '1.0';
