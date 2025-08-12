@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1
+
+### Maintenance
+- Fixed repository urls
+
 ## 1.2.0
 
 ### Features
