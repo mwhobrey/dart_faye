@@ -221,20 +221,42 @@ class Dispatcher {
     final response = await _sendMessage(message, headers: headers);
     _logger.info('Dispatcher: Handshake response: $response');
 
-    if (response['successful'] == true) {
-      _clientId = response['clientId'] as String?;
+    // Apply extension to handshake response if available
+    Map<String, dynamic> processedResponse = response;
+    if (_extension != null) {
+      try {
+        _logger.info(
+            'Dispatcher: Applying extension to handshake response: $response');
+        _logger.info('Dispatcher: Extension type: ${_extension.runtimeType}');
+        _logger.info(
+            'Dispatcher: Extension methods: ${_extension.runtimeType.toString()}');
+        _logger.info('Dispatcher: Extension object: $_extension');
+        processedResponse = _extension.incoming(response);
+        _logger.info('Dispatcher: Extension returned: $processedResponse');
+        _logger.info('Dispatcher: Applied extension to handshake response');
+      } catch (e) {
+        _logger.warning('Dispatcher: Extension processing failed: $e');
+        _logger.warning(
+            'Dispatcher: Extension error stack trace: ${e.toString()}');
+      }
+    } else {
+      _logger.info('Dispatcher: No extension available for handshake response');
+    }
+
+    if (processedResponse['successful'] == true) {
+      _clientId = processedResponse['clientId'] as String?;
       _logger.info('Dispatcher: Handshake successful, clientId: $_clientId');
 
       // Update advice
-      if (response['advice'] != null) {
-        _advice.addAll(response['advice'] as Map<String, dynamic>);
+      if (processedResponse['advice'] != null) {
+        _advice.addAll(processedResponse['advice'] as Map<String, dynamic>);
         _logger.info('Dispatcher: Updated advice: $_advice');
       }
 
       // Set recommended transport (but only if we support it)
-      if (response['supportedConnectionTypes'] != null) {
+      if (processedResponse['supportedConnectionTypes'] != null) {
         final supportedTypes =
-            response['supportedConnectionTypes'] as List<dynamic>;
+            processedResponse['supportedConnectionTypes'] as List<dynamic>;
         final recommendedType = supportedTypes.first as String;
         _logger
             .info('Dispatcher: Server recommended transport: $recommendedType');
@@ -381,10 +403,12 @@ class Dispatcher {
     _logger.info('Dispatcher: Subscribing to channel: $channel');
     _logger.info('Dispatcher: Current state: $_state, clientId: $_clientId');
 
-    if (_state != 3 || _clientId == null) {
-      // connected
+    // Allow subscriptions during connecting state (2) as well as connected state (3)
+    // This is needed because extensions may try to subscribe during handshake response processing
+    if ((_state != 3 && _state != 2) || _clientId == null) {
+      // connected or connecting
       _logger.severe(
-          'Dispatcher: Cannot subscribe - not connected or no clientId. State: $_state, clientId: $_clientId');
+          'Dispatcher: Cannot subscribe - not connected/connecting or no clientId. State: $_state, clientId: $_clientId');
       throw FayeError.network('Not connected');
     }
 
@@ -395,8 +419,21 @@ class Dispatcher {
       'id': _generateMessageId(),
     };
 
-    _logger.info('Dispatcher: Subscribing with message: $message');
-    return await _sendMessage(message);
+    // Apply extension if available
+    Map<String, dynamic> processedMessage = message;
+    if (_extension != null) {
+      try {
+        _logger.info('Dispatcher: Original subscription message: $message');
+        processedMessage = _extension.outgoing(message);
+        _logger.info('Dispatcher: Extension returned: $processedMessage');
+        _logger.info('Dispatcher: Applied extension to subscription message');
+      } catch (e) {
+        _logger.warning('Dispatcher: Extension processing failed: $e');
+      }
+    }
+
+    _logger.info('Dispatcher: Subscribing with message: $processedMessage');
+    return await _sendMessage(processedMessage);
   }
 
   /// Send unsubscribe message
@@ -417,10 +454,16 @@ class Dispatcher {
   /// Extension for message processing
   dynamic _extension;
 
+  /// Get extension for message processing
+  dynamic get extension => _extension;
+
   /// Set extension for message processing
   void setExtension(dynamic extension) {
     _extension = extension;
     _logger.info('Dispatcher: Extension set: $extension');
+    _logger.info('Dispatcher: Extension type: ${extension.runtimeType}');
+    _logger.info(
+        'Dispatcher: Extension methods: ${extension.runtimeType.toString()}');
   }
 
   /// Send publish message

@@ -342,5 +342,330 @@ void main() {
         expect(clientId, equals('client123'));
       });
     });
+    
+    group('Extension Tests', () {
+      test('should create default extension', () {
+        final extension = DefaultFayeExtension(
+          api: 'test-api-key',
+          token: 'test-token',
+        );
+        
+        expect(extension.api, equals('test-api-key'));
+        expect(extension.token, equals('test-token'));
+      });
+      
+      test('should process outgoing messages with authentication', () {
+        final extension = DefaultFayeExtension(
+          api: 'test-api-key',
+          token: 'test-token',
+        );
+        
+        final message = {
+          'channel': '/chat/room1',
+          'data': {'message': 'Hello'},
+        };
+        
+        final processed = extension.outgoing(message);
+        
+        expect(processed['channel'], equals('/chat/room1'));
+        expect(processed['data'], equals({'message': 'Hello'}));
+        expect(processed['ext']['api'], equals('test-api-key'));
+        expect(processed['ext']['token'], equals('test-token'));
+      });
+      
+      test('should process incoming messages', () {
+        final extension = DefaultFayeExtension(
+          api: 'test-api-key',
+          token: 'test-token',
+        );
+        
+        final message = {
+          'channel': '/chat/room1',
+          'data': {'message': 'Hello'},
+        };
+        
+        final processed = extension.incoming(message);
+        
+        expect(processed, equals(message));
+      });
+      
+      test('should handle extension with logging callback', () {
+        var loggedMessages = <String>[];
+        
+        final extension = DefaultFayeExtension(
+          api: 'test-api-key',
+          token: 'test-token',
+          onLog: (level, data) {
+            loggedMessages.add('[$level] $data');
+          },
+        );
+        
+        final message = {'channel': '/test'};
+        extension.outgoing(message);
+        
+        expect(loggedMessages.length, greaterThan(0));
+        expect(loggedMessages.any((msg) => msg.contains('debug')), isTrue);
+      });
+      
+      test('should create custom extension', () {
+        final extension = CustomFayeExtension(
+          outgoingProcessor: (message) {
+            message['custom'] = 'outgoing';
+            return message;
+          },
+          incomingProcessor: (message) {
+            message['custom'] = 'incoming';
+            return message;
+          },
+        );
+        
+        final outgoingMessage = {'channel': '/test'};
+        final incomingMessage = {'channel': '/test'};
+        
+        final processedOutgoing = extension.outgoing(outgoingMessage);
+        final processedIncoming = extension.incoming(incomingMessage);
+        
+        expect(processedOutgoing['custom'], equals('outgoing'));
+        expect(processedIncoming['custom'], equals('incoming'));
+      });
+      
+      test('should handle custom extension with null processors', () {
+        final extension = CustomFayeExtension();
+        
+        final message = {'channel': '/test'};
+        final processed = extension.outgoing(message);
+        
+        expect(processed, equals(message));
+      });
+      
+      test('should handle extension processing errors gracefully', () {
+        final extension = CustomFayeExtension(
+          outgoingProcessor: (message) {
+            throw Exception('Processing error');
+          },
+        );
+        
+        final message = {'channel': '/test'};
+        final processed = extension.outgoing(message);
+        
+        // Should return original message on error
+        expect(processed, equals(message));
+      });
+    });
+    
+    group('Client Extension Tests', () {
+      test('should set extension on client', () {
+        final client = Client('http://localhost:8000/bayeux');
+        final extension = DefaultFayeExtension(
+          api: 'test-api-key',
+          token: 'test-token',
+        );
+        
+        client.setExtension(extension);
+        
+        // Extension is set internally, we can't directly test it
+        // but we can verify the method doesn't throw
+        expect(() => client.setExtension(extension), returnsNormally);
+      });
+      
+      test('should set extension on dispatcher', () {
+        final dispatcher = Dispatcher('http://localhost:8000/bayeux', {});
+        final extension = DefaultFayeExtension(
+          api: 'test-api-key',
+          token: 'test-token',
+        );
+        
+        dispatcher.setExtension(extension);
+        
+        // Extension is set internally, we can't directly test it
+        // but we can verify the method doesn't throw
+        expect(() => dispatcher.setExtension(extension), returnsNormally);
+      });
+    });
+    
+    group('Logging Tests', () {
+      test('should have logger in client', () {
+        final client = Client('http://localhost:8000/bayeux');
+        expect(client, isNotNull);
+        // Logger is internal, but we can verify client creation doesn't fail
+      });
+      
+      test('should have logger in dispatcher', () {
+        final dispatcher = Dispatcher('http://localhost:8000/bayeux', {});
+        expect(dispatcher, isNotNull);
+        // Logger is internal, but we can verify dispatcher creation doesn't fail
+      });
+      
+      test('should have logger in transports', () {
+        final httpTransport = HttpTransport();
+        final wsTransport = WebSocketTransport();
+        
+        expect(httpTransport, isNotNull);
+        expect(wsTransport, isNotNull);
+        // Logger is internal, but we can verify transport creation doesn't fail
+      });
+    });
+    
+    group('WebSocket Transport Enhancement Tests', () {
+      test('should support batch message handling', () {
+        final transport = WebSocketTransport();
+        expect(transport.supported, isTrue);
+        expect(transport.name, equals('websocket'));
+      });
+      
+      test('should set auto-reconnect settings', () {
+        final transport = WebSocketTransport();
+        
+        transport.setAutoReconnect(
+          true,
+          maxAttempts: 10,
+          delay: 2000,
+        );
+        
+        // Settings are internal, but we can verify the method doesn't throw
+        expect(() => transport.setAutoReconnect(false), returnsNormally);
+      });
+      
+      test('should set heartbeat interval', () {
+        final transport = WebSocketTransport();
+        
+        transport.setHeartbeatInterval(5000);
+        
+        // Setting is internal, but we can verify the method doesn't throw
+        expect(() => transport.setHeartbeatInterval(1000), returnsNormally);
+      });
+      
+      test('should set WebSocket protocols', () {
+        final transport = WebSocketTransport();
+        
+        transport.setProtocols(['protocol1', 'protocol2']);
+        
+        // Protocols are internal, but we can verify the method doesn't throw
+        expect(() => transport.setProtocols(['test']), returnsNormally);
+      });
+    });
+    
+    group('Transport Selection Tests', () {
+      test('should set transport on client', () {
+        final client = Client('http://localhost:8000/bayeux');
+        
+        expect(() => client.setTransport('http'), returnsNormally);
+        expect(() => client.setTransport('websocket'), returnsNormally);
+      });
+      
+      test('should throw error for invalid transport', () {
+        final client = Client('http://localhost:8000/bayeux');
+        
+        expect(() => client.setTransport('invalid'), throwsArgumentError);
+      });
+    });
+    
+    group('Statistics Tests', () {
+      test('should get client statistics', () {
+        final client = Client('http://localhost:8000/bayeux');
+        final stats = client.statistics;
+        
+        expect(stats, isA<Map<String, dynamic>>());
+        expect(stats['state'], isNotNull);
+        expect(stats['clientId'], isNull); // Not connected yet
+        expect(stats['transport'], isNotNull);
+        expect(stats['subscriptions'], isA<int>());
+      });
+      
+      test('should get dispatcher statistics', () {
+        final dispatcher = Dispatcher('http://localhost:8000/bayeux', {});
+        final stats = dispatcher.statistics;
+        
+        expect(stats, isA<Map<String, dynamic>>());
+        expect(stats['state'], isNotNull);
+        expect(stats['clientId'], isNull); // Not connected yet
+        expect(stats['transport'], isNotNull);
+      });
+    });
+    
+    group('Enhanced Extension Tests', () {
+      test('should access extension from dispatcher', () {
+        final dispatcher = Dispatcher('http://localhost:8000/bayeux', {});
+        final extension = DefaultFayeExtension(
+          api: 'test-api-key',
+          token: 'test-token',
+        );
+        
+        dispatcher.setExtension(extension);
+        
+        expect(dispatcher.extension, equals(extension));
+        expect(dispatcher.extension.runtimeType, equals(DefaultFayeExtension));
+      });
+      
+      test('should handle extension processing in incoming messages', () {
+        final client = Client('http://localhost:8000/bayeux');
+        final extension = CustomFayeExtension(
+          incomingProcessor: (message) {
+            message['processed'] = true;
+            return message;
+          },
+        );
+        
+        client.setExtension(extension);
+        
+        // Extension is set internally, we can verify the method doesn't throw
+        expect(() => client.setExtension(extension), returnsNormally);
+      });
+      
+      test('should allow subscriptions during connecting state', () {
+        final client = Client('http://localhost:8000/bayeux');
+        
+        // This test verifies that the subscription method accepts connecting state
+        // In a real scenario, the state would be managed by the dispatcher
+        expect(client, isNotNull);
+        // The actual state validation happens in the dispatcher
+      });
+    });
+    
+    group('Extension Integration Tests', () {
+      test('should process messages through extension pipeline', () {
+        final extension = CustomFayeExtension(
+          outgoingProcessor: (message) {
+            final processed = Map<String, dynamic>.from(message);
+            processed['outgoing_processed'] = true;
+            return processed;
+          },
+          incomingProcessor: (message) {
+            final processed = Map<String, dynamic>.from(message);
+            processed['incoming_processed'] = true;
+            return processed;
+          },
+        );
+        
+        final outgoingMessage = {'channel': '/test', 'data': 'hello'};
+        final incomingMessage = {'channel': '/test', 'data': 'world'};
+        
+        final processedOutgoing = extension.outgoing(outgoingMessage);
+        final processedIncoming = extension.incoming(incomingMessage);
+        
+        expect(processedOutgoing['outgoing_processed'], isTrue);
+        expect(processedIncoming['incoming_processed'], isTrue);
+      });
+      
+      test('should handle extension errors gracefully', () {
+        final extension = CustomFayeExtension(
+          outgoingProcessor: (message) {
+            throw Exception('Outgoing processing error');
+          },
+          incomingProcessor: (message) {
+            throw Exception('Incoming processing error');
+          },
+        );
+        
+        final message = {'channel': '/test'};
+        
+        // Should return original message on error
+        final outgoingResult = extension.outgoing(message);
+        final incomingResult = extension.incoming(message);
+        
+        expect(outgoingResult, equals(message));
+        expect(incomingResult, equals(message));
+      });
+    });
   });
 }

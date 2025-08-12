@@ -187,9 +187,11 @@ class Client {
     _logger.info('Client: Subscribing to channel: $channel');
     _logger.info('Client: Current state: $_state');
 
-    if (_state != connected) {
-      _logger
-          .severe('Client: Cannot subscribe - not connected. State: $_state');
+    // Allow subscriptions during connecting state (2) as well as connected state (3)
+    // This is needed because extensions may try to subscribe during handshake response processing
+    if (_state != connected && _state != connecting) {
+      _logger.severe(
+          'Client: Cannot subscribe - not connected or connecting. State: $_state');
       throw FayeError.network('Not connected');
     }
 
@@ -261,12 +263,8 @@ class Client {
     await unsubscribe(subscription.channel.name);
   }
 
-  /// Extension for message processing
-  dynamic _extension;
-
   /// Set extension for message processing
   void setExtension(dynamic extension) {
-    _extension = extension;
     _dispatcher.setExtension(extension);
     _logger.info('Client: Extension set: $extension');
   }
@@ -333,23 +331,45 @@ class Client {
   void _handleMessage(Map<String, dynamic> message) {
     _logger.info('Client: Received message: $message');
 
-    final channel = message['channel'] as String?;
+    // Apply extension to incoming message if available
+    Map<String, dynamic> processedMessage = message;
+    if (_dispatcher.extension != null) {
+      try {
+        _logger
+            .info('Client: Applying extension to incoming message: $message');
+        _logger.info(
+            'Client: Extension type: ${_dispatcher.extension.runtimeType}');
+        _logger.info(
+            'Client: Extension methods available: ${_dispatcher.extension.runtimeType.toString()}');
+        processedMessage = _dispatcher.extension.incoming(message);
+        _logger.info('Client: Extension returned: $processedMessage');
+        _logger.info('Client: Applied extension to incoming message');
+      } catch (e) {
+        _logger.warning('Client: Extension processing failed: $e');
+        _logger.warning('Client: Extension error stack trace: ${e.toString()}');
+      }
+    } else {
+      _logger.info('Client: No extension available for incoming message');
+    }
+
+    final channel = processedMessage['channel'] as String?;
 
     if (channel == null) {
-      _logger.warning('Client: Received message without channel: $message');
+      _logger.warning(
+          'Client: Received message without channel: $processedMessage');
       return;
     }
 
     // Handle meta messages
     if (channel.startsWith('/meta/')) {
       _logger.info('Client: Handling meta message for channel: $channel');
-      _handleMetaMessage(message);
+      _handleMetaMessage(processedMessage);
       return;
     }
 
     // Handle regular messages
     _logger.info('Client: Handling regular message for channel: $channel');
-    _handleRegularMessage(message);
+    _handleRegularMessage(processedMessage);
   }
 
   /// Handle meta messages

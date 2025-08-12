@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.2.0
+
+### Features
+- **Enhanced Extension Support**: Improved extension processing for both incoming and outgoing messages
+  - Extension processing now applied to incoming messages in Client
+  - Better error handling and logging for extension operations
+  - Extension type and method availability logging for debugging
+- **Improved Subscription State Management**: Enhanced subscription handling during connection phases
+  - Allow subscriptions during connecting state (not just connected state)
+  - Better support for extensions that need to subscribe during handshake response processing
+  - More robust state validation for subscription operations
+
+### Bug Fixes
+- **Extension Access**: Added proper extension getter in Dispatcher for Client access
+- **Message Processing**: Fixed extension processing in incoming message handling
+- **State Management**: Improved connection state handling for subscription operations
+
+### Technical Improvements
+- Enhanced logging for extension operations and debugging
+- Better error handling in extension processing
+- Improved state validation for subscription operations
+- More comprehensive extension integration throughout the message flow
+
 ## 1.1.0
 
 ### Features
