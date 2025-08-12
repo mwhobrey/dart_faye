@@ -1,9 +1,9 @@
 name: dart_faye
 description: A complete Dart implementation of Faye, a publish-subscribe messaging system that implements the Bayeux protocol. Supports HTTP long-polling, callback-polling, and WebSocket transports with automatic reconnection, channel pattern matching, and real-time messaging capabilities.
-version: 1.2.0
+version: 1.2.1
 homepage: https://mikewhob.com/dart_faye
-repository: https://github.com/mikewhob/dart_faye
-issue_tracker: https://github.com/mikewhob/dart_faye/issues
+repository: https://github.com/mwhobrey/dart_faye
+issue_tracker: https://github.com/mwhobrey/dart_faye/issues
 documentation: https://mikewhob.com/dart_faye
 license: MIT
 keywords:
