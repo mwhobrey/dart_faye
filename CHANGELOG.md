@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.2
+
+### Bug Fixes
+- **Bayeux Response Handling**: Fixed critical bug where the package failed to handle Bayeux protocol responses that come as JSON arrays
+  - Added `extractBayeuxMessage()` helper function to handle both single object and array responses
+  - Updated HTTP transport, Client, and Dispatcher to properly handle array responses
+  - Fixed "type 'String' is not a subtype of type 'int' of 'index'" error when accessing response properties
+  - Enhanced HTTP transport's `send()` method to properly handle responses for immediate requests
+  - Added comprehensive tests for Bayeux response handling scenarios
+  - Made the package compatible with servers that return responses in the standard Bayeux array format
+
+### Technical Improvements
+- Added helper functions for consistent Bayeux response handling across all components
+- Enhanced error handling for empty arrays and invalid response types
+- Improved compatibility with various Bayeux server implementations
+- Added test coverage for response handling edge cases
+
 ## 1.2.1
 
 ### Maintenance

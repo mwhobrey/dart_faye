@@ -57,6 +57,22 @@ class Dispatcher {
     _logger.info('Dispatcher: Dispatcher created successfully');
   }
 
+  /// Extract the first message from a Bayeux response
+  /// Bayeux responses can be either a single object or an array of objects
+  Map<String, dynamic> extractBayeuxMessage(dynamic response) {
+    if (response is List) {
+      if (response.isEmpty) {
+        throw FayeError.network('Empty response array from server');
+      }
+      return response.first as Map<String, dynamic>;
+    } else if (response is Map<String, dynamic>) {
+      return response;
+    } else {
+      throw FayeError.network(
+          'Invalid response type from server: ${response.runtimeType}');
+    }
+  }
+
   /// Get current state
   int get state => _state;
 
@@ -221,8 +237,11 @@ class Dispatcher {
     final response = await _sendMessage(message, headers: headers);
     _logger.info('Dispatcher: Handshake response: $response');
 
+    // Extract the first message from Bayeux response
+    final responseMessage = extractBayeuxMessage(response);
+
     // Apply extension to handshake response if available
-    Map<String, dynamic> processedResponse = response;
+    Map<String, dynamic> processedResponse = responseMessage;
     if (_extension != null) {
       try {
         _logger.info(
@@ -273,8 +292,9 @@ class Dispatcher {
         }
       }
     } else {
-      _logger.severe('Dispatcher: Handshake failed: ${response['error']}');
-      throw FayeError.fromBayeux(response['error'] ?? {});
+      _logger.severe(
+          'Dispatcher: Handshake failed: ${processedResponse['error']}');
+      throw FayeError.fromBayeux(processedResponse['error'] ?? {});
     }
   }
 

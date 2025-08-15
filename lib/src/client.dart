@@ -75,6 +75,22 @@ class Client {
     _logger.info('Client: Client created successfully');
   }
 
+  /// Extract the first message from a Bayeux response
+  /// Bayeux responses can be either a single object or an array of objects
+  Map<String, dynamic> extractBayeuxMessage(dynamic response) {
+    if (response is List) {
+      if (response.isEmpty) {
+        throw FayeError.network('Empty response array from server');
+      }
+      return response.first as Map<String, dynamic>;
+    } else if (response is Map<String, dynamic>) {
+      return response;
+    } else {
+      throw FayeError.network(
+          'Invalid response type from server: ${response.runtimeType}');
+    }
+  }
+
   /// Initialize the client
   void _initialize() {
     _logger.info('Client: Initializing client...');
@@ -209,7 +225,9 @@ class Client {
       final response = await _dispatcher.subscribe(channel);
       _logger.info('Client: Dispatcher.subscribe() response: $response');
 
-      if (response['successful'] == true) {
+      final responseMessage = extractBayeuxMessage(response);
+
+      if (responseMessage['successful'] == true) {
         final subscription = Subscription(
           id: subscriptionId,
           channel: channelObj,
@@ -222,8 +240,8 @@ class Client {
         return subscription;
       } else {
         _logger.severe(
-            'Client: Subscription to $channel failed: ${response['error']}');
-        throw FayeError.fromBayeux(response['error'] ?? {});
+            'Client: Subscription to $channel failed: ${responseMessage['error']}');
+        throw FayeError.fromBayeux(responseMessage['error'] ?? {});
       }
     } catch (e) {
       _logger
@@ -242,15 +260,16 @@ class Client {
 
     try {
       final response = await _dispatcher.unsubscribe(channel);
+      final responseMessage = extractBayeuxMessage(response);
 
-      if (response['successful'] == true) {
+      if (responseMessage['successful'] == true) {
         // Remove all subscriptions for this channel
         _subscriptions.removeWhere(
             (id, subscription) => subscription.channel.name == channel);
 
         _logger.info('Unsubscribed from $channel successfully');
       } else {
-        throw FayeError.fromBayeux(response['error'] ?? {});
+        throw FayeError.fromBayeux(responseMessage['error'] ?? {});
       }
     } catch (e) {
       _logger.severe('Unsubscription from $channel failed: $e');
@@ -300,11 +319,13 @@ class Client {
         data: data,
       );
 
-      if (response['successful'] == true) {
+      final responseMessage = extractBayeuxMessage(response);
+
+      if (responseMessage['successful'] == true) {
         publication.markSuccessful();
         _logger.info('Client: Published to $channel successfully');
       } else {
-        final error = FayeError.fromBayeux(response['error'] ?? {});
+        final error = FayeError.fromBayeux(responseMessage['error'] ?? {});
         publication.markFailed(error);
         _logger.severe('Client: Publication to $channel failed: $error');
       }
