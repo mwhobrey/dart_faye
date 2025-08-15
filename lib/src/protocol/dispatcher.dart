@@ -409,8 +409,6 @@ class Dispatcher {
         );
         _logger.info('Dispatcher: Received response: $response');
         _logger.info('Dispatcher: Response type: ${response.runtimeType}');
-        _logger.info('Dispatcher: Response is Map: ${response is Map<String, dynamic>}');
-        _logger.info('Dispatcher: Response is String: ${response is String}');
         return response;
       }
 
