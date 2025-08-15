@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.2.3
+
+### Bug Fixes
+- **Dispatcher Type Check**: Fixed unnecessary type check warning in dispatcher's `_sendMessage` method
+  - Removed redundant type check that was flagged by the Dart analyzer
+  - Improved code quality and eliminated linter warnings
+
+### Dependency Updates
+- **Package Cleanup**: Removed unused dependencies and updated to latest versions
+  - Removed unused `crypto`, `convert`, and `json_annotation` dependencies from core package
+  - Updated `http` from ^1.1.0 to ^1.2.0
+  - Updated `web_socket_channel` from ^2.4.0 to ^3.0.3
+  - Updated `uuid` from ^4.0.0 to ^4.3.3
+  - Updated `meta` from ^1.9.0 to ^1.12.0
+  - Updated `lints` from ^3.0.0 to ^6.0.0
+  - Moved `crypto` and `convert` to dev_dependencies for test scripts
+
+### Technical Improvements
+- Reduced package size by removing unused dependencies
+- Improved dependency management and version compatibility
+- Enhanced code quality with latest linter rules
+
 ## 1.2.2
 
 ### Bug Fixes

@@ -1,6 +1,6 @@
 name: dart_faye
 description: A complete Dart implementation of Faye, a publish-subscribe messaging system that implements the Bayeux protocol.
-version: 1.2.2
+version: 1.2.3
 homepage: https://mikewhob.com/dart_faye
 repository: https://github.com/mwhobrey/dart_faye
 issue_tracker: https://github.com/mwhobrey/dart_faye/issues
