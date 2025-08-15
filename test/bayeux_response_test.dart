@@ -77,7 +77,7 @@ void main() {
       expect(
           () => client.extractBayeuxMessage(response),
           throwsA(isA<FayeError>().having((e) => e.message, 'message',
-              contains('Invalid response type from server'))));
+              contains('Failed to parse response as JSON'))));
     });
   });
 }

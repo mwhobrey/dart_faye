@@ -6,6 +6,7 @@ import 'subscription.dart';
 import 'publication.dart';
 import 'error.dart';
 import 'protocol/dispatcher.dart';
+import 'dart:convert'; // Added for jsonDecode
 
 /// Main Faye client for Bayeux protocol communication
 class Client {
@@ -78,14 +79,64 @@ class Client {
   /// Extract the first message from a Bayeux response
   /// Bayeux responses can be either a single object or an array of objects
   Map<String, dynamic> extractBayeuxMessage(dynamic response) {
-    if (response is List) {
+    _logger
+        .info('Client: extractBayeuxMessage called with response: $response');
+    _logger.info('Client: Response type: ${response.runtimeType}');
+    _logger.info('Client: Response is String: ${response is String}');
+    _logger.info('Client: Response is Map: ${response is Map<String, dynamic>}');
+    _logger.info('Client: Response is List: ${response is List}');
+
+
+    if (response is String) {
+      // Parse string response as JSON
+      try {
+        _logger.info('Client: Parsing string response as JSON');
+        final decoded = jsonDecode(response);
+        _logger.info('Client: Decoded response: $decoded');
+        _logger.info('Client: Decoded type: ${decoded.runtimeType}');
+
+        if (decoded is List) {
+          if (decoded.isEmpty) {
+            throw FayeError.network('Empty response array from server');
+          }
+          final firstItem = decoded.first;
+          _logger.info('Client: First item from list: $firstItem');
+          _logger.info('Client: First item type: ${firstItem.runtimeType}');
+
+          if (firstItem is Map<String, dynamic>) {
+            return firstItem;
+          } else {
+            throw FayeError.network(
+                'Invalid first item type in response array: ${firstItem.runtimeType}');
+          }
+        } else if (decoded is Map<String, dynamic>) {
+          return decoded;
+        } else {
+          throw FayeError.network(
+              'Invalid decoded response type: ${decoded.runtimeType}');
+        }
+      } catch (e) {
+        _logger.severe('Client: Failed to parse response as JSON: $e');
+        throw FayeError.network('Failed to parse response as JSON: $e');
+      }
+    } else if (response is List) {
       if (response.isEmpty) {
         throw FayeError.network('Empty response array from server');
       }
-      return response.first as Map<String, dynamic>;
+      final firstItem = response.first;
+      _logger.info('Client: First item from list: $firstItem');
+      _logger.info('Client: First item type: ${firstItem.runtimeType}');
+
+      if (firstItem is Map<String, dynamic>) {
+        return firstItem;
+      } else {
+        throw FayeError.network(
+            'Invalid first item type in response array: ${firstItem.runtimeType}');
+      }
     } else if (response is Map<String, dynamic>) {
       return response;
     } else {
+      _logger.severe('Client: Invalid response type: ${response.runtimeType}');
       throw FayeError.network(
           'Invalid response type from server: ${response.runtimeType}');
     }
@@ -241,7 +292,14 @@ class Client {
       } else {
         _logger.severe(
             'Client: Subscription to $channel failed: ${responseMessage['error']}');
-        throw FayeError.fromBayeux(responseMessage['error'] ?? {});
+        final error = responseMessage['error'];
+        if (error is Map<String, dynamic>) {
+          throw FayeError.fromBayeux(error);
+        } else if (error is String) {
+          throw FayeError.network('Subscription failed: $error');
+        } else {
+          throw FayeError.network('Subscription failed: Unknown error');
+        }
       }
     } catch (e) {
       _logger

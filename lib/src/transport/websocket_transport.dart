@@ -225,39 +225,65 @@ class WebSocketTransport extends BaseTransport {
   /// Handle incoming WebSocket message
   void _handleMessage(dynamic data) {
     _logger.info('WebSocket: Received message: $data');
+    _logger.info('WebSocket: Data type: ${data.runtimeType}');
+    _logger.info('WebSocket: Data is String: ${data is String}');
+    _logger.info('WebSocket: Data is Map: ${data is Map<String, dynamic>}');
+    _logger.info(
+        'WebSocket: Data length: ${data is String ? data.length : 'N/A'}');
+
 
     try {
       if (data is String) {
         _logger.info('WebSocket: Parsing string message');
         final decoded = jsonDecode(data);
-        
+
         if (decoded is List) {
-          _logger.info('WebSocket: Received batch message with ${decoded.length} items');
+          _logger.info(
+              'WebSocket: Received batch message with ${decoded.length} items');
           // Handle batch messages (array of messages)
           for (final item in decoded) {
             if (item is Map<String, dynamic>) {
               _logger.info('WebSocket: Emitting batch message item: $item');
+              _logger.info('WebSocket: Item type: ${item.runtimeType}');
               emitMessage(item);
             } else {
-              _logger.warning('WebSocket: Skipping non-map item in batch: $item');
+              _logger
+                  .warning('WebSocket: Skipping non-map item in batch: $item');
             }
           }
         } else if (decoded is Map<String, dynamic>) {
           _logger.info('WebSocket: Emitting single message: $decoded');
+          _logger.info('WebSocket: Message type: ${decoded.runtimeType}');
           emitMessage(decoded);
         } else {
-          _logger.severe('WebSocket: Invalid decoded message format: $decoded');
-          throw FormatException('Invalid decoded message format: $decoded');
+          _logger.warning(
+              'WebSocket: Received non-map/non-list decoded message: $decoded (type: ${decoded.runtimeType})');
+          // Convert other types to a map format for compatibility
+          final messageMap = <String, dynamic>{
+            'data': decoded,
+            'type': decoded.runtimeType.toString(),
+          };
+          _logger.info('WebSocket: Converting to map format: $messageMap');
+          emitMessage(messageMap);
         }
       } else if (data is Map<String, dynamic>) {
         _logger.info('WebSocket: Using map message directly');
         emitMessage(data);
       } else {
-        _logger.severe('WebSocket: Invalid message format: $data');
-        throw FormatException('Invalid message format: $data');
+        _logger.warning(
+            'WebSocket: Received non-string/non-map data: $data (type: ${data.runtimeType})');
+        // Convert other types to a map format for compatibility
+        final messageMap = <String, dynamic>{
+          'data': data,
+          'type': data.runtimeType.toString(),
+        };
+        _logger.info('WebSocket: Converting to map format: $messageMap');
+        emitMessage(messageMap);
       }
     } catch (e) {
       _logger.severe('WebSocket: Failed to parse message: $e');
+      _logger.severe('WebSocket: Original data was: $data');
+      _logger.severe('WebSocket: Data type was: ${data.runtimeType}');
       emitError(FayeError.protocol('Failed to parse message: $e'));
     }
   }

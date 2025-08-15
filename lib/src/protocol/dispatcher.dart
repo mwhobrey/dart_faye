@@ -4,6 +4,7 @@ import '../error.dart';
 import '../transport/transport.dart';
 import '../transport/http_transport.dart';
 import '../transport/websocket_transport.dart';
+import 'dart:convert'; // Added for jsonDecode
 
 /// Dispatcher for handling Bayeux protocol messages
 class Dispatcher {
@@ -60,14 +61,59 @@ class Dispatcher {
   /// Extract the first message from a Bayeux response
   /// Bayeux responses can be either a single object or an array of objects
   Map<String, dynamic> extractBayeuxMessage(dynamic response) {
-    if (response is List) {
+    _logger.info('Dispatcher: extractBayeuxMessage called with response: $response');
+    _logger.info('Dispatcher: Response type: ${response.runtimeType}');
+    
+    if (response is String) {
+      // Parse string response as JSON
+      try {
+        _logger.info('Dispatcher: Parsing string response as JSON');
+        final decoded = jsonDecode(response);
+        _logger.info('Dispatcher: Decoded response: $decoded');
+        _logger.info('Dispatcher: Decoded type: ${decoded.runtimeType}');
+        
+        if (decoded is List) {
+          if (decoded.isEmpty) {
+            throw FayeError.network('Empty response array from server');
+          }
+          final firstItem = decoded.first;
+          _logger.info('Dispatcher: First item from list: $firstItem');
+          _logger.info('Dispatcher: First item type: ${firstItem.runtimeType}');
+          
+          if (firstItem is Map<String, dynamic>) {
+            return firstItem;
+          } else {
+            throw FayeError.network(
+                'Invalid first item type in response array: ${firstItem.runtimeType}');
+          }
+        } else if (decoded is Map<String, dynamic>) {
+          return decoded;
+        } else {
+          throw FayeError.network(
+              'Invalid decoded response type: ${decoded.runtimeType}');
+        }
+      } catch (e) {
+        _logger.severe('Dispatcher: Failed to parse response as JSON: $e');
+        throw FayeError.network('Failed to parse response as JSON: $e');
+      }
+    } else if (response is List) {
       if (response.isEmpty) {
         throw FayeError.network('Empty response array from server');
       }
-      return response.first as Map<String, dynamic>;
+      final firstItem = response.first;
+      _logger.info('Dispatcher: First item from list: $firstItem');
+      _logger.info('Dispatcher: First item type: ${firstItem.runtimeType}');
+      
+      if (firstItem is Map<String, dynamic>) {
+        return firstItem;
+      } else {
+        throw FayeError.network(
+            'Invalid first item type in response array: ${firstItem.runtimeType}');
+      }
     } else if (response is Map<String, dynamic>) {
       return response;
     } else {
+      _logger.severe('Dispatcher: Invalid response type: ${response.runtimeType}');
       throw FayeError.network(
           'Invalid response type from server: ${response.runtimeType}');
     }
@@ -328,6 +374,7 @@ class Dispatcher {
   }) async {
     _logger.info('Dispatcher: Sending message: $message');
 
+
     if (_transport == null) {
       _logger.severe('Dispatcher: No transport available for sending message');
       throw FayeError.network('No transport available');
@@ -340,6 +387,7 @@ class Dispatcher {
       completer = Completer<Map<String, dynamic>>();
       _responseCallbacks[messageId] = completer;
       _logger.info('Dispatcher: Waiting for response to message $messageId');
+      _logger.info('Dispatcher: Created completer for message $messageId');
     }
 
     try {
@@ -351,7 +399,7 @@ class Dispatcher {
       if (completer != null) {
         _logger.info(
             'Dispatcher: Waiting for response with timeout: ${_transport!.timeout}s');
-        return await completer.future.timeout(
+        final response = await completer.future.timeout(
           Duration(seconds: _transport!.timeout),
           onTimeout: () {
             _logger.severe('Dispatcher: Message timeout for $messageId');
@@ -359,30 +407,92 @@ class Dispatcher {
             throw FayeError.timeout('Message timeout: $messageId');
           },
         );
+        _logger.info('Dispatcher: Received response: $response');
+        _logger.info('Dispatcher: Response type: ${response.runtimeType}');
+        _logger.info('Dispatcher: Response is Map: ${response is Map<String, dynamic>}');
+        _logger.info('Dispatcher: Response is String: ${response is String}');
+        return response;
       }
 
       _logger.info('Dispatcher: No response expected, returning empty map');
       return <String, dynamic>{};
     } catch (e) {
       _logger.severe('Dispatcher: Failed to send message: $e');
-      _responseCallbacks.remove(messageId);
+      if (messageId != null) {
+        _responseCallbacks.remove(messageId);
+      }
       rethrow;
     }
   }
 
   /// Handle transport message
-  void _handleTransportMessage(Map<String, dynamic> message) {
+  void _handleTransportMessage(dynamic message) {
     _logger.info('Dispatcher: Received transport message: $message');
+    _logger.info('Dispatcher: Message type: ${message.runtimeType}');
+    
+    // Handle string messages by parsing them
+    if (message is String) {
+      _logger.info('Dispatcher: Received string message, parsing as JSON');
+      try {
+        final decoded = jsonDecode(message);
+        _logger.info('Dispatcher: Decoded message: $decoded');
+        _logger.info('Dispatcher: Decoded type: ${decoded.runtimeType}');
+        
+        if (decoded is Map<String, dynamic>) {
+          _handleTransportMessage(decoded);
+          return;
+        } else if (decoded is List) {
+          // Handle array of messages
+          for (final item in decoded) {
+            if (item is Map<String, dynamic>) {
+              _handleTransportMessage(item);
+            } else {
+              _logger.warning('Dispatcher: Skipping non-map item in array: $item');
+            }
+          }
+          return;
+        } else {
+          _logger.warning('Dispatcher: Unexpected decoded type: ${decoded.runtimeType}');
+          return;
+        }
+      } catch (e) {
+        _logger.severe('Dispatcher: Failed to parse string message: $e');
+        _emitError(FayeError.protocol('Failed to parse message: $e'));
+        return;
+      }
+    }
+    
+    // Ensure message is a Map
+    if (message is! Map<String, dynamic>) {
+      _logger.severe('Dispatcher: Invalid message type: ${message.runtimeType}');
+      _emitError(FayeError.protocol('Invalid message type: ${message.runtimeType}'));
+      return;
+    }
+    
+    _logger.info('Dispatcher: Message keys: ${message.keys.toList()}');
 
     final messageId = message['id'] as String?;
+    _logger.info('Dispatcher: Message ID: $messageId');
 
     // Check if this is a response to a pending request
     if (messageId != null && _responseCallbacks.containsKey(messageId)) {
       _logger.info('Dispatcher: Found pending callback for message $messageId');
       final completer = _responseCallbacks.remove(messageId)!;
+      _logger.info(
+          'Dispatcher: About to complete callback with message: $message');
+      _logger.info('Dispatcher: Completer is completed: ${completer.isCompleted}');
+      
+      // Check if this is an error response
+      if (message['successful'] == false) {
+        _logger.warning('Dispatcher: Error response received: ${message['error']}');
+      }
+      
       completer.complete(message);
       _logger.info('Dispatcher: Completed callback for message $messageId');
       return;
+    } else if (messageId != null) {
+      _logger.info('Dispatcher: No pending callback found for message $messageId');
+      _logger.info('Dispatcher: Available callbacks: ${_responseCallbacks.keys.toList()}');
     }
 
     // Emit message to listeners
@@ -423,6 +533,7 @@ class Dispatcher {
     _logger.info('Dispatcher: Subscribing to channel: $channel');
     _logger.info('Dispatcher: Current state: $_state, clientId: $_clientId');
 
+
     // Allow subscriptions during connecting state (2) as well as connected state (3)
     // This is needed because extensions may try to subscribe during handshake response processing
     if ((_state != 3 && _state != 2) || _clientId == null) {
@@ -453,7 +564,10 @@ class Dispatcher {
     }
 
     _logger.info('Dispatcher: Subscribing with message: $processedMessage');
-    return await _sendMessage(processedMessage);
+    final response = await _sendMessage(processedMessage);
+    _logger.info('Dispatcher: Subscribe response: $response');
+    _logger.info('Dispatcher: Subscribe response type: ${response.runtimeType}');
+    return response;
   }
 
   /// Send unsubscribe message

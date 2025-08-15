@@ -186,14 +186,59 @@ class HttpTransport extends BaseTransport {
   /// Extract the first message from a Bayeux response
   /// Bayeux responses can be either a single object or an array of objects
   Map<String, dynamic> extractBayeuxMessage(dynamic response) {
-    if (response is List) {
+    _logger.info('HTTP: extractBayeuxMessage called with response: $response');
+    _logger.info('HTTP: Response type: ${response.runtimeType}');
+    
+    if (response is String) {
+      // Parse string response as JSON
+      try {
+        _logger.info('HTTP: Parsing string response as JSON');
+        final decoded = jsonDecode(response);
+        _logger.info('HTTP: Decoded response: $decoded');
+        _logger.info('HTTP: Decoded type: ${decoded.runtimeType}');
+        
+        if (decoded is List) {
+          if (decoded.isEmpty) {
+            throw FayeError.network('Empty response array from server');
+          }
+          final firstItem = decoded.first;
+          _logger.info('HTTP: First item from list: $firstItem');
+          _logger.info('HTTP: First item type: ${firstItem.runtimeType}');
+          
+          if (firstItem is Map<String, dynamic>) {
+            return firstItem;
+          } else {
+            throw FayeError.network(
+                'Invalid first item type in response array: ${firstItem.runtimeType}');
+          }
+        } else if (decoded is Map<String, dynamic>) {
+          return decoded;
+        } else {
+          throw FayeError.network(
+              'Invalid decoded response type: ${decoded.runtimeType}');
+        }
+      } catch (e) {
+        _logger.severe('HTTP: Failed to parse response as JSON: $e');
+        throw FayeError.network('Failed to parse response as JSON: $e');
+      }
+    } else if (response is List) {
       if (response.isEmpty) {
         throw FayeError.network('Empty response array from server');
       }
-      return response.first as Map<String, dynamic>;
+      final firstItem = response.first;
+      _logger.info('HTTP: First item from list: $firstItem');
+      _logger.info('HTTP: First item type: ${firstItem.runtimeType}');
+      
+      if (firstItem is Map<String, dynamic>) {
+        return firstItem;
+      } else {
+        throw FayeError.network(
+            'Invalid first item type in response array: ${firstItem.runtimeType}');
+      }
     } else if (response is Map<String, dynamic>) {
       return response;
     } else {
+      _logger.severe('HTTP: Invalid response type: ${response.runtimeType}');
       throw FayeError.network(
           'Invalid response type from server: ${response.runtimeType}');
     }

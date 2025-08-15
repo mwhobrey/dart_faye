@@ -133,6 +133,7 @@ abstract class BaseTransport implements Transport {
   @protected
   void emitMessage(Map<String, dynamic> message) {
     _logger.info('BaseTransport: Emitting message: $message');
+    _logger.info('BaseTransport: Message type: ${message.runtimeType}');
     _messageController.add(message);
     _statistics['messagesReceived']++;
     _statistics['bytesReceived'] += jsonEncode(message).length;

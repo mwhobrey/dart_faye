@@ -26,19 +26,19 @@ environment:
   flutter: ">=3.0.0"
 
 dependencies:
-  http: ^1.1.0
-  web_socket_channel: ^2.4.0
-  crypto: ^3.0.3
-  uuid: ^4.0.0
+  http: ^1.2.0
+  web_socket_channel: ^3.0.3
+  uuid: ^4.3.3
   logging: ^1.2.0
-  json_annotation: ^4.8.1
-  meta: ^1.9.0
+  meta: ^1.12.0
 
 dev_dependencies:
   test: ^1.24.0
   build_runner: ^2.4.6
   json_serializable: ^6.7.1
-  lints: ^3.0.0
+  lints: ^6.0.0
+  crypto: ^3.0.3
+  convert: ^3.1.1
 
 flutter:
   # No flutter-specific dependencies needed for this package
